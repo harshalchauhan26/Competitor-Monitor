@@ -207,10 +207,11 @@ var slackOn = true;          // the "Send Slack alert" switch
 var sitesData = [];          // the watchlist from the server
 var confirmDomain = "";      // which "Forget site" button is waiting for a second click
 var loadingTimer = null;
+var loadingStart = 0;
 var toastTimer = null;
 var confirmTimer = null;
 
-var LOADING_STEPS = ["Opening site", "Reading sitemaps and feeds", "Opening new posts", "Checking pricing", "Sending alert"];
+var LOADING_STEPS = ["Opening site", "Reading sitemaps and feeds", "Opening new posts", "Checking pricing", "Saving and sending alert"];
 var SITE_COLORS = ["var(--wa)", "var(--ok)", "var(--in)"];
 
 // ---------------- small helpers ----------------
@@ -307,21 +308,35 @@ function drawLoading(step) {
     if (i === step) { css += " now"; }
     html += '<div class="' + css + '"><b class="dot">' + dot + '</b><span>' + LOADING_STEPS[i] + '</span></div>';
   }
+  html += '<div class="small-note" id="elapsed" style="margin-top:8px"></div>';
   html += '</div>';
   el("resultArea").innerHTML = html;
 }
 
+function updateElapsed() {
+  var seconds = Math.round((Date.now() - loadingStart) / 1000);
+  var text = "Working for " + seconds + "s.";
+  if (seconds > 30) { text += " Big sites on free hosting can take 1 to 2 minutes. Keep this page open."; }
+  var box = el("elapsed");
+  if (box) { box.textContent = text; }
+}
+
 function startLoading() {
-  var step = 0;
-  drawLoading(step);
+  loadingStart = Date.now();
+  var shownStep = 0;
+  drawLoading(shownStep);
+  updateElapsed();
   clearInterval(loadingTimer);
-  // The server gives one answer at the end, so this is a visual estimate of progress.
+  // The server gives one answer at the end, so the steps are a visual estimate of progress.
   loadingTimer = setInterval(function () {
-    if (step < LOADING_STEPS.length - 1) {
-      step = step + 1;
+    var seconds = Math.floor((Date.now() - loadingStart) / 1000);
+    var step = Math.min(Math.floor(seconds / 4), LOADING_STEPS.length - 1);
+    if (step !== shownStep) {
+      shownStep = step;
       drawLoading(step);
     }
-  }, 3500);
+    updateElapsed();
+  }, 1000);
 }
 
 function stopLoading() {
@@ -455,6 +470,13 @@ function showResult(result) {
 
   if (result.seconds !== undefined) {
     html += '<div class="small-note">Scan took ' + result.seconds + ' seconds · ' + result.total_tracked + ' URLs tracked</div>';
+  }
+  if (result.timings) {
+    var parts = [];
+    for (var name in result.timings) {
+      parts.push(name + " " + result.timings[name] + "s");
+    }
+    html += '<div class="small-note">Where the time went: ' + escapeHtml(parts.join(" · ")) + '</div>';
   }
   html += '</div>';
   el("resultArea").innerHTML = html;

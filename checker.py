@@ -1,10 +1,14 @@
+# checker.py - the main logic. One call to run_check() does a full check of one competitor:
+#   open site -> find posts -> keep only NEW ones -> add keyword data -> save -> alert
 import time
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta
+
 import alerts
 import config
 import database
 import keywords
 import scraper
+
 
 def is_old(published):
     if published == "":
@@ -51,7 +55,7 @@ def check_pricing(domain, pricing_page):
 def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
     start_time = time.time()
 
-    ##CLEANING DOMAIN
+    # 1. Clean the domain and look up what we already know
     try:
         domain = scraper.clean_domain(domain_input)
     except scraper.ScrapeError as error:
@@ -60,21 +64,28 @@ def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
     known_urls = database.get_known_urls(domain)
     first_run = len(known_urls) == 0
     last_checked = database.get_last_checked(domain)
+    timings = {}
+    step_start = time.time()
 
-    #GETTING SITE
+    # 2. Open the website
     try:
         site, soup, home_url = scraper.open_site(domain)
     except scraper.ScrapeError as error:
         return {"status": error.code, "message": error.message, "domain": domain}
 
-    #FINDING ALL POSTS
+    timings["open site"] = round(time.time() - step_start, 1)
+    step_start = time.time()
+
+    # 3. Find all possible posts and the pricing page
     candidates = scraper.find_posts(site, soup, home_url)
     pricing_page = scraper.find_pricing(site, soup, home_url)
+    timings["find posts and pricing"] = round(time.time() - step_start, 1)
+    step_start = time.time()
 
     result = {"status": "ok", "message": "", "domain": domain, "first_run": first_run,
               "new_posts": [], "total_tracked": 0, "note": "", "pricing": None, "alert": None}
 
-    #KEEP NEW URLS
+    # 4. Keep only URLs we have never seen before
     new_candidates = []
     for item in candidates:
         if item["url"] not in known_urls:
@@ -87,8 +98,10 @@ def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
     for item in to_open:
         urls_to_open.append(item["url"])
     pages = scraper.fetch_many(site, urls_to_open)
+    timings["open new posts"] = round(time.time() - step_start, 1)
+    step_start = time.time()
 
-    #OPEN EACH PAGE AND GET TITLE DATE DESC
+    # 5. Open each new page and read title, date and description
     rows_to_save = []
     posts_to_report = []
     for index in range(len(to_open)):
@@ -116,6 +129,7 @@ def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
                     posts_to_report.append(row)
         rows_to_save.append(row)
 
+    # URLs beyond the limit are saved without details so they are never reported later
     for item in not_opened:
         rows_to_save.append({"url": item["url"], "title": "", "published": "", "description": "",
                              "keyword": "", "volume": None, "demand": None})
@@ -123,18 +137,22 @@ def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
     if first_run:
         posts_to_report = posts_to_report[:10]
 
-    #KEYWORD DATA
+    # 6. Keyword data (only for posts we will report)
     result["note"] = keywords.add_keyword_data(posts_to_report[:15])
+    timings["keywords"] = round(time.time() - step_start, 1)
+    step_start = time.time()
 
-    #SAVING IN DB
+    # 7. Save everything, so the next run knows what it has seen
     database.save_posts(domain, rows_to_save)
     database.set_last_checked(domain)
     result["total_tracked"] = len(known_urls) + len(rows_to_save)
+    timings["save to database"] = round(time.time() - step_start, 1)
+    step_start = time.time()
 
-    # price
+    # 8. Pricing
     result["pricing"] = check_pricing(domain, pricing_page)
 
-    #prep of result
+    # 9. Prepare the result
     for row in posts_to_report:
         result["new_posts"].append({
             "title": row["title"], "url": row["url"], "published": row["published"],
@@ -157,8 +175,10 @@ def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
     else:
         result["message"] = "No new posts since the last check."
 
+    timings["pricing and result"] = round(time.time() - step_start, 1)
+    step_start = time.time()
 
-#ALERT SETUP
+    # 10. Send the alert (only when there is something to say)
     price_changed = result["pricing"]["status"] == "changed"
     if send_alert and result["status"] == "ok" and (len(posts_to_report) > 0 or price_changed):
         text = alerts.build_message(domain, result["new_posts"], result["pricing"], first_run, last_checked)
@@ -168,22 +188,7 @@ def run_check(domain_input, slack_webhook="", email_to="", send_alert=True):
     else:
         result["alert"] = {"sent": [], "errors": [], "skipped": True}
 
+    timings["send alert"] = round(time.time() - step_start, 1)
+    result["timings"] = timings
     result["seconds"] = round(time.time() - start_time, 1)
     return result
-        
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-

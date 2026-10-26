@@ -1,9 +1,16 @@
+# keywords.py - finds the target keyword of a post and how much demand it has.
+# FREE mode (default): asks Google's autocomplete. Result is a 0-100 demand ESTIMATE.
+# OPTIONAL paid mode: Keywords Everywhere gives real monthly search volume.
 import re
+
 import requests
+
 import config
+
 
 class KeywordApiError(Exception):
     pass
+
 
 def trim_words(words):
     """Removes boring words at the start and end, like 'an' or 'of'."""
@@ -53,7 +60,7 @@ def autocomplete_score(keyword):
         response = requests.get(
             config.SUGGEST_URL,
             params={"client": "firefox", "q": keyword},
-            timeout=8,
+            timeout=4,
         )
         suggestions = response.json()[1]
     except (requests.RequestException, ValueError, IndexError):
@@ -115,6 +122,9 @@ def add_keyword_data(posts):
                 note = str(error) + ". Showing the free Google autocomplete estimate instead."
                 use_paid_api = False
 
+        if google_failed:
+            continue    # Google already failed once, so do not wait for it again
+
         best_score = None
         for guess in guesses:
             score = autocomplete_score(guess)
@@ -124,6 +134,8 @@ def add_keyword_data(posts):
             if best_score is None or score > best_score:
                 best_score = score
                 post["keyword"] = guess
+            if best_score >= 40:
+                break    # the first phrase is good enough, keep it
         post["demand"] = best_score
 
     if google_failed and note == "":
@@ -147,8 +159,3 @@ def demand_text(post):
             level = "None found"
         return "Demand: " + level + " (" + str(score) + "/100, free estimate)"
     return "Keyword data unavailable"
-
-
-
-
-    
