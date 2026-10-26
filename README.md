@@ -3,8 +3,8 @@
 Enter a competitor's domain. The tool scrapes their blog and pricing page with its
 own scraper, saves what it finds, and on every later check reports only what is new.
 
-Live demo: PASTE-LINK-HERE
-Demo video: PASTE-LOOM-LINK-HERE
+Live demo: https://competitor-monitor-xei7.onrender.com/
+Demo video: 
 
 ## How it works
 1. Scrapes the site: sitemaps, RSS feeds, blog listing pages and homepage links.
