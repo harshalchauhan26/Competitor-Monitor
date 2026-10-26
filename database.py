@@ -62,15 +62,31 @@ def get_known_urls(domain):
 
 
 def save_posts(domain, posts):
+    """Saves many posts using ONE connection (much faster than one connection per post)."""
+    if len(posts) == 0:
+        return
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    for post in posts:
-        run_sql(
-            "INSERT INTO posts (domain, url, title, published, description, keyword, volume, demand, first_seen) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (domain, url) DO NOTHING",
-            (domain, post["url"], post["title"], post["published"], post["description"],
-             post["keyword"], post["volume"], post["demand"], now),
-        )
+    sql = (
+        "INSERT INTO posts (domain, url, title, published, description, keyword, volume, demand, first_seen) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (domain, url) DO NOTHING"
+    )
 
+    rows = []
+    for post in posts:
+        rows.append((domain, post["url"], post["title"], post["published"], post["description"],
+                     post["keyword"], post["volume"], post["demand"], now))
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    if USING_POSTGRES:
+        import psycopg2.extras
+        sql = sql.replace("?", "%s")
+        psycopg2.extras.execute_batch(cursor, sql, rows, page_size=200)   # sends 200 rows per trip
+    else:
+        cursor.executemany(sql, rows)
+    connection.commit()
+    cursor.close()
+    connection.close()
 
 def get_last_checked(domain):
     row = run_sql("SELECT last_checked FROM sites WHERE domain = ?", (domain,), "one")

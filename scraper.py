@@ -4,6 +4,7 @@ import re
 import socket
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from html import unescape
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -15,12 +16,11 @@ import config
 
 HEADERS = {"User-Agent": config.USER_AGENT, "Accept-Language": "en-US,en;q=0.9"}
 
-#HELPING WORDS DICTIONARY FOR SCRAPING
+# Words that usually appear in blog URLs, like /blog/my-post
 BLOG_WORDS = ["blog", "blogs", "article", "articles", "news", "resources", "resource",
               "insights", "learn", "guides", "guide", "stories", "posts", "journal",
               "magazine", "library", "academy", "updates"]
-
-
+# Words that mean "this is NOT a post" (category pages, tag pages, page 2 ...)
 SKIP_WORDS = ["tag", "tags", "category", "categories", "author", "authors", "page",
               "feed", "topic", "topics", "search", "wp-content", "wp-json", "cart", "login"]
 FILE_ENDINGS = [".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".pdf", ".css", ".js", ".xml", ".zip", ".mp4"]
@@ -34,7 +34,17 @@ FEED_PAGES = ["/feed", "/rss", "/feed.xml", "/rss.xml", "/atom.xml",
 SITEMAP_PAGES = ["/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml", "/post-sitemap.xml"]
 PRICING_PAGES = ["/pricing", "/plans", "/price"]
 
+# Size limits keep memory low (the free server only has 512 MB of RAM)
+MAX_PAGE_BYTES = 1500000       # a normal page: 1.5 MB is plenty for title, date and description
+MAX_SITEMAP_BYTES = 3000000    # a sitemap file
+MAX_SITEMAP_URLS = 5000        # URLs read from one sitemap file
 
+# Sitemap entries are read with these patterns (a lot lighter than building a full XML tree)
+SITEMAP_ENTRY = re.compile(r"<(url|sitemap)>(.*?)</\1>", re.S)
+LOC_PATTERN = re.compile(r"<loc>(.*?)</loc>", re.S)
+LASTMOD_PATTERN = re.compile(r"<lastmod>(.*?)</lastmod>", re.S)
+
+# A price looks like: $29   $1,200   €49.99   £10   ₹999
 PRICE_PATTERN = re.compile(r"[$€£₹]\s?\d[\d,]*(?:\.\d+)?")
 
 
@@ -47,7 +57,8 @@ class ScrapeError(Exception):
         self.message = message
 
 
-#SMALL HELPERS 
+# ---------------------------------------------------------------- small helpers
+
 def clean_domain(text):
     """'https://www.Example.com/blog?x=1' becomes 'example.com'."""
     text = text.strip().lower()
@@ -73,13 +84,26 @@ def is_private_host(domain):
     return address.is_private or address.is_loopback or address.is_link_local
 
 
-def fetch(url):
-    """Downloads one page. Returns (status_code, text, final_url). Status 0 means it failed."""
+def fetch(url, max_bytes=MAX_PAGE_BYTES):
+    """Downloads one page (at most max_bytes). Returns (status_code, text, final_url). Status 0 means it failed."""
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10, stream=True)
+        chunks = []
+        size = 0
+        for chunk in response.iter_content(chunk_size=65536):
+            chunks.append(chunk)
+            size = size + len(chunk)
+            if size >= max_bytes:
+                break
+        response.close()
     except requests.RequestException:
         return 0, "", url
-    return response.status_code, response.text, response.url
+
+    encoding = response.encoding
+    if encoding is None or encoding.lower() == "iso-8859-1":
+        encoding = "utf-8"
+    text = b"".join(chunks).decode(encoding, errors="replace")
+    return response.status_code, text, response.url
 
 
 def looks_blocked(status, text):
@@ -119,14 +143,14 @@ def can_fetch(site, url):
     return site["robots"].can_fetch("*", url)
 
 
-def fetch_many(site, urls):
-    """Downloads many pages at the same time (8 at once). Results keep the same order as urls."""
+def fetch_many(site, urls, max_bytes=MAX_PAGE_BYTES):
+    """Downloads many pages at the same time (4 at once). Results keep the same order as urls."""
     def get_one(url):
         if not can_fetch(site, url):
             return 0, "", url
-        return fetch(url)
+        return fetch(url, max_bytes)
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         return list(pool.map(get_one, urls))
 
 
@@ -187,7 +211,8 @@ def looks_like_article_url(url):
     return False
 
 
-#SITE OPENING
+# ---------------------------------------------------------------- opening the site
+
 def open_site(domain):
     """Opens the homepage. Returns (site, homepage_soup, homepage_url)."""
     if is_private_host(domain):
@@ -209,7 +234,7 @@ def open_site(domain):
     parts = urlparse(final_url)
     site = {"domain": domain, "base": parts.scheme + "://" + parts.netloc, "robots": None, "sitemaps": []}
 
-
+    # robots.txt tells us which pages we may visit and where the sitemaps are
     robots_status, robots_text, robots_url = fetch(site["base"] + "/robots.txt")
     if robots_status == 200 and "<html" not in robots_text[:300].lower():
         parser = RobotFileParser()
@@ -223,7 +248,8 @@ def open_site(domain):
     return site, soup, final_url
 
 
-#FINIDING POSTS -- for big sites open 10 children
+# ---------------------------------------------------------------- finding posts
+
 def add_candidate(candidates, site, url, title="", date="", description="", trusted=False):
     """Adds a possible post to the candidates dictionary (or fills in missing details)."""
     if not same_site(site, url):
@@ -244,10 +270,17 @@ def add_candidate(candidates, site, url, title="", date="", description="", trus
         item["trusted"] = True
 
 
+def xml_text(text):
+    """Cleans text taken from XML: removes CDATA wrappers and turns &amp; back into &."""
+    text = text.strip()
+    text = text.replace("<![CDATA[", "").replace("]]>", "")
+    return unescape(text).strip()
+
+
 def read_sitemaps(site, sitemap_urls, candidates):
     """Reads sitemap files. Adds posts to candidates. Returns child sitemaps found inside."""
     children = []
-    responses = fetch_many(site, sitemap_urls)
+    responses = fetch_many(site, sitemap_urls, MAX_SITEMAP_BYTES)
     for index in range(len(sitemap_urls)):
         status, text, final_url = responses[index]
         if status != 200 or "<" not in text[:100]:
@@ -259,25 +292,32 @@ def read_sitemaps(site, sitemap_urls, candidates):
             if word in sitemap_urls[index].lower():
                 trusted = True
 
-        xml = BeautifulSoup(text, "xml")
-        for tag in xml.find_all("sitemap"):
-            loc = tag.find("loc")
-            if loc is not None:
-                children.append(loc.get_text().strip())
-
-        for tag in xml.find_all("url")[:5000]:
-            loc = tag.find("loc")
+        url_count = 0
+        for match in SITEMAP_ENTRY.finditer(text):
+            kind = match.group(1)
+            entry = match.group(2)
+            loc = LOC_PATTERN.search(entry)
             if loc is None:
                 continue
-            url = loc.get_text().strip()
-            date = ""
-            lastmod = tag.find("lastmod")
-            if lastmod is not None:
-                date = to_date_string(lastmod.get_text().strip())
+            url = xml_text(loc.group(1))
+
+            if kind == "sitemap":
+                children.append(url)
+                continue
+
+            url_count = url_count + 1
+            if url_count > MAX_SITEMAP_URLS:
+                break
+
             parts = path_parts(url)
             is_hub = len(parts) > 0 and parts[-1] in BLOG_WORDS
             if looks_like_article_url(url) or (trusted and len(parts) > 0 and not is_hub and not is_bad_path(url)):
+                date = ""
+                lastmod = LASTMOD_PATTERN.search(entry)
+                if lastmod is not None:
+                    date = to_date_string(xml_text(lastmod.group(1)))
                 add_candidate(candidates, site, url, date=date, trusted=trusted)
+        text = ""     # let Python free this sitemap before reading the next one
     return children
 
 
@@ -436,7 +476,8 @@ def find_posts(site, soup, home_url):
     return posts
 
 
-#READIING DATA
+# ---------------------------------------------------------------- reading one post
+
 def get_meta(soup, name):
     tag = soup.find("meta", attrs={"property": name})
     if tag is None:
@@ -517,7 +558,8 @@ def parse_post(html, url):
     return {"title": title[:300], "published": published, "description": description[:400], "is_article": is_article}
 
 
-#PRICE PAGE
+# ---------------------------------------------------------------- pricing page
+
 def extract_prices(html):
     soup = BeautifulSoup(html, "lxml")
     for tag in soup(["script", "style", "noscript"]):
@@ -558,8 +600,3 @@ def find_pricing(site, soup, home_url):
         if len(prices) > 0:
             return {"found": True, "url": final_url, "prices": prices}
     return {"found": page_found, "url": page_url, "prices": []}
-
-
-
-
-
