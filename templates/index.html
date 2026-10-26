@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Competitor Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&display=swap" rel="stylesheet">
+<style>
+/* ---------- Colours (light and dark) ---------- */
+body.t-light { --bg:#FFF4DC; --card:#FFFFFF; --ink:#1A1A1A; --mut:#5F574A; --ac:#FF5C2B; --acink:#1A1A1A; --ok:#BDF05A; --wa:#FFD93D; --er:#FF8A80; --in:#9ED8FF; --ne:#E9E1CF; --sh:#1A1A1A; }
+body.t-dark  { --bg:#17140F; --card:#241F17; --ink:#FFF4DC; --mut:#BDB29E; --ac:#FF7344; --acink:#1A1A1A; --ok:#A6DC48; --wa:#F2CB2E; --er:#F27A70; --in:#7CC4F2; --ne:#3A3328; --sh:#000000; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes ping { 0% { transform: scale(.7); opacity: .8; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes bob  { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-8px) rotate(3deg); } }
+@keyframes pop  { from { transform: translateY(12px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+a { color: inherit; text-decoration-color: var(--ac); text-decoration-thickness: 3px; text-underline-offset: 3px; }
+a:hover { background: var(--ac); color: #1A1A1A; }
+.display { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; }
+
+.shell { min-height: 100vh; padding: 24px 20px 80px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+/* ---------- Header ---------- */
+header { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { width: 52px; height: 52px; border-radius: 50%; background: var(--ac); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--sh); display: flex; align-items: center; justify-content: center; gap: 7px; flex: none; }
+.logo i { width: 8px; height: 12px; border-radius: 50%; background: var(--ink); }
+.brand-name { font-size: 28px; line-height: 1; letter-spacing: -.02em; }
+.brand-tag { font-size: 15px; color: var(--mut); margin-top: 4px; }
+.theme-btn { height: 44px; padding: 0 18px; border-radius: 99px; border: 3px solid var(--ink); background: var(--card); color: var(--ink); font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 3px 3px 0 var(--sh); }
+
+/* ---------- 3 steps ---------- */
+.steps { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-weight: 700; font-size: 15px; }
+.steps span.step { display: flex; gap: 8px; align-items: center; }
+.steps b { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--ink); display: flex; align-items: center; justify-content: center; font-size: 13px; color: #1A1A1A; }
+
+/* ---------- Layout ---------- */
+.columns { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+main { flex: 2 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
+aside { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- Check card ---------- */
+.check-card { background: var(--card); border: 3px solid var(--ink); border-radius: 24px; box-shadow: 6px 6px 0 var(--sh); padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.check-card label.title { font-size: 22px; line-height: 1.1; }
+.text-input { height: 56px; width: 100%; border-radius: 14px; border: 3px solid var(--ink); background: var(--bg); color: var(--ink); padding: 0 18px; font-size: 18px; font-weight: 600; outline: none; }
+.text-input.small { height: 48px; border-radius: 12px; padding: 0 14px; font-size: 15px; font-weight: 400; }
+.text-input:focus-visible { outline: 3px solid var(--ac); outline-offset: 3px; }
+details { font-size: 15px; }
+summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+summary:focus-visible { outline: 3px solid var(--ac); outline-offset: 3px; }
+.alert-settings { display: flex; flex-direction: column; gap: 12px; padding: 6px 0 4px; }
+.switch-row { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.switch-row:focus-visible { outline: 3px solid var(--ac); outline-offset: 3px; }
+.switch { flex: none; width: 52px; height: 30px; border-radius: 99px; border: 3px solid var(--ink); background: var(--ne); padding: 2px; display: flex; justify-content: flex-start; }
+.switch.on { background: var(--ok); justify-content: flex-end; }
+.switch i { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); }
+
+.btn-main { height: 60px; border: 3px solid var(--ink); border-radius: 16px; background: var(--ac); color: var(--acink); font: 800 20px/1 'Bricolage Grotesque', sans-serif; cursor: pointer; box-shadow: 4px 4px 0 var(--sh); }
+.btn-main:hover { transform: translate(-1px, -1px); box-shadow: 6px 6px 0 var(--sh); }
+.btn-main:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--sh); }
+.btn-main:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+.btn-main:disabled { opacity: .6; cursor: progress; transform: none; box-shadow: 4px 4px 0 var(--sh); }
+
+/* ---------- Empty state ---------- */
+.empty { background: var(--card); border: 3px dashed var(--ink); border-radius: 24px; padding: 32px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.mascot-wrap { position: relative; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; animation: bob 3s ease-in-out infinite; }
+.ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--ac); animation: ping 2.4s ease-out infinite; }
+.ring.second { animation-delay: 1.2s; }
+.mascot { width: 110px; height: 110px; border-radius: 50%; background: var(--ac); border: 4px solid var(--ink); box-shadow: 5px 5px 0 var(--sh); display: flex; align-items: center; justify-content: center; gap: 16px; }
+.mascot i { width: 14px; height: 22px; border-radius: 50%; background: var(--ink); }
+.empty-title { background: var(--wa); color: #1A1A1A; border: 3px solid var(--ink); border-radius: 16px; padding: 8px 14px; font-weight: 800; font-size: 15px; }
+.empty-text { max-width: 340px; color: var(--mut); font-size: 15px; line-height: 1.5; }
+
+/* ---------- Loading steps ---------- */
+.loading-card { background: var(--card); border: 3px solid var(--ink); border-radius: 24px; box-shadow: 6px 6px 0 var(--sh); padding: 22px; display: flex; flex-direction: column; gap: 6px; }
+.load-step { display: flex; align-items: center; gap: 14px; min-height: 46px; padding: 0 10px; border-radius: 14px; border: 2px solid transparent; opacity: .55; font-size: 16px; font-weight: 600; }
+.load-step.now { background: var(--wa); border-color: var(--ink); opacity: 1; font-weight: 800; color: #1A1A1A; }
+.load-step.done { opacity: 1; }
+.dot { flex: none; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; border: 2px solid var(--mut); color: var(--mut); }
+.load-step.done .dot { background: var(--ok); color: #1A1A1A; border-color: var(--ink); font-size: 14px; }
+.load-step.now .dot { border: 4px solid var(--bg); border-top-color: var(--ink); animation: spin .7s linear infinite; font-size: 0; }
+
+/* ---------- Results ---------- */
+.results { display: flex; flex-direction: column; gap: 18px; animation: pop .3s ease-out; }
+.banners { display: flex; flex-direction: column; gap: 10px; }
+.banner { display: flex; gap: 12px; padding: 14px 16px; border-radius: 18px; border: 3px solid var(--ink); background: var(--k); color: #1A1A1A; box-shadow: 4px 4px 0 var(--sh); }
+.banner .ic { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #1A1A1A; color: var(--k); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+.banner .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.banner .t1 { font-weight: 800; font-size: 17px; line-height: 1.3; }
+.banner .t2 { font-size: 14px; line-height: 1.45; font-weight: 500; }
+.slack-line { display: flex; gap: 8px; font-size: 14px; font-weight: 700; padding: 0 4px; }
+.posts { display: flex; flex-direction: column; gap: 14px; }
+.section-title { font-size: 20px; line-height: 1.1; }
+.post { background: var(--card); border: 3px solid var(--ink); border-radius: 20px; box-shadow: 5px 5px 0 var(--sh); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.post a.post-title { font: 800 19px/1.3 'Bricolage Grotesque', sans-serif; color: var(--ink); }
+.post .desc { font-size: 14px; line-height: 1.5; color: var(--mut); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.meta .date { font-size: 13px; font-weight: 700; color: var(--mut); margin-right: 2px; }
+.pill { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 99px; border: 2px solid var(--ink); background: var(--bg); }
+.pill.badge { font-weight: 800; background: var(--k); color: #1A1A1A; }
+.small-note { font-size: 12px; color: var(--mut); }
+.pricing { background: var(--card); border: 3px solid var(--ink); border-radius: 20px; box-shadow: 5px 5px 0 var(--sh); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.pricing-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.pricing .note { font-size: 14px; line-height: 1.5; color: var(--mut); }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip-row .label { width: 68px; font-size: 13px; font-weight: 800; }
+.chip { font-size: 17px; font-weight: 800; padding: 4px 12px; border-radius: 10px; border: 2px solid var(--ink); background: var(--ne); color: var(--ink); }
+.chip.removed { background: var(--er); color: #1A1A1A; text-decoration: line-through; }
+.chip.added { background: var(--ok); color: #1A1A1A; }
+.pricing a { font-size: 14px; font-weight: 700; align-self: flex-start; }
+
+/* ---------- Watchlist ---------- */
+.aside-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.btn-all { height: 44px; padding: 0 16px; border-radius: 12px; border: 3px solid var(--ink); background: var(--card); color: var(--ink); font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 3px 3px 0 var(--sh); }
+.btn-all:active { transform: translate(3px, 3px); box-shadow: none; }
+.btn-all:focus-visible, .theme-btn:focus-visible { outline: 3px solid var(--ac); outline-offset: 3px; }
+.site-card { background: var(--card); border: 3px solid var(--ink); border-radius: 20px; box-shadow: 4px 4px 0 var(--sh); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.site-top { display: flex; gap: 12px; align-items: center; }
+.site-letter { flex: none; width: 40px; height: 40px; border-radius: 12px; border: 2px solid var(--ink); background: var(--k); color: #1A1A1A; display: flex; align-items: center; justify-content: center; font: 800 18px/1 'Bricolage Grotesque', sans-serif; text-transform: uppercase; }
+.site-name { font-weight: 800; font-size: 16px; overflow-wrap: anywhere; }
+.site-sub { font-size: 13px; color: var(--mut); }
+.site-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.site-buttons button { height: 44px; padding: 0 14px; border-radius: 12px; border: 2px solid var(--ink); font-size: 14px; cursor: pointer; font-weight: 700; background: transparent; color: var(--ink); }
+.site-buttons button:focus-visible { outline: 3px solid var(--ac); outline-offset: 2px; }
+.site-buttons .recheck { background: var(--ac); color: var(--acink); font-weight: 800; }
+.site-buttons .forget-site { background: var(--er); color: #1A1A1A; font-weight: 800; }
+.site-buttons .forget-site.sure { background: #E5392B; color: #FFFFFF; }
+.no-sites { border: 3px dashed var(--ink); border-radius: 20px; padding: 18px; color: var(--mut); font-size: 14px; line-height: 1.5; }
+button:disabled { cursor: progress; }
+
+/* ---------- Toast ---------- */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); display: none; gap: 12px; align-items: center; padding: 14px 18px; border-radius: 16px; border: 3px solid var(--ink); background: var(--k); color: #1A1A1A; box-shadow: 5px 5px 0 var(--sh); font-weight: 700; font-size: 15px; z-index: 50; }
+.toast.show { display: flex; animation: pop .25s ease-out; }
+.toast .ic { flex: none; width: 26px; height: 26px; border-radius: 50%; background: #1A1A1A; color: var(--k); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+</style>
+</head>
+
+<body class="t-light">
+<div class="shell">
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="logo"><i></i><i></i></div>
+      <div>
+        <div class="brand-name display">Competitor Monitor</div>
+        <div class="brand-tag">Know what your competitors publish, the day they publish it.</div>
+      </div>
+    </div>
+    <button class="theme-btn" id="themeButton" title="Switch between light and dark mode">Dark mode</button>
+  </header>
+
+  <div class="steps">
+    <span class="step"><b style="background:var(--wa)">1</b>Enter a domain</span><span>→</span>
+    <span class="step"><b style="background:var(--ok)">2</b>First scan saves a baseline</span><span>→</span>
+    <span class="step"><b style="background:var(--in)">3</b>Re-check anytime: only new posts and price changes show up</span>
+  </div>
+
+  <div class="columns">
+    <main>
+      <div class="check-card">
+        <label class="title display" for="domain">Which competitor should we research?</label>
+        <input class="text-input" id="domain" placeholder="ahrefs.com" autocomplete="off">
+        <details>
+          <summary>Alert settings</summary>
+          <div class="alert-settings">
+            <input class="text-input small" id="slack" placeholder="Slack webhook URL (optional if set on the server)">
+            <div class="switch-row" id="slackSwitchRow" role="switch" aria-checked="true" tabindex="0">
+              <span class="switch on" id="slackSwitch"><i></i></span>Send Slack alert when something is new
+            </div>
+          </div>
+        </details>
+        <button class="btn-main" id="goButton" title="Scan this competitor now">Check competitor</button>
+      </div>
+
+      <div id="resultArea"></div>
+    </main>
+
+    <aside>
+      <div class="aside-head">
+        <div class="section-title display">Competitors you track</div>
+        <button class="btn-all" id="recheckAll" title="Re-check every competitor, one after another">↻ Re-check all</button>
+      </div>
+      <div id="sitesList"></div>
+    </aside>
+  </div>
+
+</div>
+</div>
+
+<div class="toast" id="toast" role="status"><b class="ic" id="toastIcon"></b><span id="toastText"></span></div>
+
+<script>
+// ============================================================
+//  Competitor Monitor - page logic (plain JavaScript)
+// ============================================================
+
+var busy = false;            // true while a scan is running
+var slackOn = true;          // the "Send Slack alert" switch
+var sitesData = [];          // the watchlist from the server
+var confirmDomain = "";      // which "Forget site" button is waiting for a second click
+var loadingTimer = null;
+var toastTimer = null;
+var confirmTimer = null;
+
+var LOADING_STEPS = ["Opening site", "Reading sitemaps and feeds", "Opening new posts", "Checking pricing", "Sending alert"];
+var SITE_COLORS = ["var(--wa)", "var(--ok)", "var(--in)"];
+
+// ---------------- small helpers ----------------
+
+function el(id) {
+  return document.getElementById(id);
+}
+
+function escapeHtml(text) {
+  var div = document.createElement("div");
+  div.textContent = (text === null || text === undefined) ? "" : String(text);
+  return div.innerHTML.replace(/"/g, "&quot;");
+}
+
+function formatDate(isoDate) {
+  if (!isoDate) { return "Date not found"; }
+  var parts = isoDate.split("-");
+  if (parts.length !== 3) { return isoDate; }
+  var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return parseInt(parts[2], 10) + " " + months[parseInt(parts[1], 10) - 1] + " " + parts[0];
+}
+
+function timeAgo(seconds) {
+  if (seconds === null || seconds === undefined) { return "never"; }
+  if (seconds < 60) { return "just now"; }
+  var minutes = Math.floor(seconds / 60);
+  if (minutes < 60) { return minutes + (minutes === 1 ? " minute ago" : " minutes ago"); }
+  var hours = Math.floor(minutes / 60);
+  if (hours < 24) { return hours + (hours === 1 ? " hour ago" : " hours ago"); }
+  var days = Math.floor(hours / 24);
+  return days + (days === 1 ? " day ago" : " days ago");
+}
+
+function badgeColor(demandText) {
+  if (demandText.indexOf("Demand: High") === 0) { return "var(--ok)"; }
+  if (demandText.indexOf("Demand: Medium") === 0) { return "var(--wa)"; }
+  if (demandText.indexOf("searches/month") !== -1) { return "var(--in)"; }
+  return "var(--ne)";
+}
+
+function showToast(isGood, text) {
+  var toast = el("toast");
+  toast.style.setProperty("--k", isGood ? "var(--ok)" : "var(--er)");
+  el("toastIcon").textContent = isGood ? "✓" : "!";
+  el("toastText").textContent = text;
+  toast.classList.remove("show");
+  void toast.offsetWidth;     // restarts the pop animation
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { toast.classList.remove("show"); }, 4000);
+}
+
+// ---------------- theme and slack switch ----------------
+
+function setTheme(isDark) {
+  document.body.className = isDark ? "t-dark" : "t-light";
+  el("themeButton").textContent = isDark ? "Light mode" : "Dark mode";
+  try { localStorage.setItem("theme", isDark ? "dark" : "light"); } catch (error) { }
+}
+
+function startTheme() {
+  var saved = "";
+  try { saved = localStorage.getItem("theme") || ""; } catch (error) { }
+  if (saved === "") {
+    saved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  setTheme(saved === "dark");
+}
+
+function toggleSlack() {
+  slackOn = !slackOn;
+  el("slackSwitch").className = slackOn ? "switch on" : "switch";
+  el("slackSwitchRow").setAttribute("aria-checked", slackOn ? "true" : "false");
+}
+
+// ---------------- empty and loading states ----------------
+
+function showEmpty() {
+  el("resultArea").innerHTML =
+    '<div class="empty">' +
+    '<div class="mascot-wrap"><i class="ring"></i><i class="ring second"></i>' +
+    '<div class="mascot"><i></i><i></i></div></div>' +
+    '<div class="empty-title">Enter a domain to start researching</div>' +
+    '<div class="empty-text">Your first check saves a baseline. After that, each report covers only new posts and pricing changes.</div>' +
+    '</div>';
+}
+
+function drawLoading(step) {
+  var html = '<div class="loading-card">';
+  for (var i = 0; i < LOADING_STEPS.length; i++) {
+    var css = "load-step";
+    var dot = String(i + 1);
+    if (i < step) { css += " done"; dot = "✓"; }
+    if (i === step) { css += " now"; }
+    html += '<div class="' + css + '"><b class="dot">' + dot + '</b><span>' + LOADING_STEPS[i] + '</span></div>';
+  }
+  html += '</div>';
+  el("resultArea").innerHTML = html;
+}
+
+function startLoading() {
+  var step = 0;
+  drawLoading(step);
+  clearInterval(loadingTimer);
+  // The server gives one answer at the end, so this is a visual estimate of progress.
+  loadingTimer = setInterval(function () {
+    if (step < LOADING_STEPS.length - 1) {
+      step = step + 1;
+      drawLoading(step);
+    }
+  }, 3500);
+}
+
+function stopLoading() {
+  clearInterval(loadingTimer);
+}
+
+// ---------------- drawing a result ----------------
+
+function bannerHtml(color, icon, title, text) {
+  var html = '<div class="banner" style="--k:' + color + '"><b class="ic">' + icon + '</b><div class="txt">';
+  html += '<div class="t1">' + escapeHtml(title) + '</div>';
+  if (text) { html += '<div class="t2">' + escapeHtml(text) + '</div>'; }
+  html += '</div></div>';
+  return html;
+}
+
+function pricingHtml(pricing) {
+  if (!pricing) { return ""; }
+  var color = "var(--ne)";
+  var label = "";
+  var note = "";
+
+  if (pricing.status === "first_snapshot") {
+    color = "var(--in)"; label = "Snapshot saved";
+    note = "Today's prices are saved as the baseline. Future checks report any change.";
+  } else if (pricing.status === "unchanged") {
+    color = "var(--ne)"; label = "Unchanged";
+    note = "Same prices as the saved snapshot.";
+  } else if (pricing.status === "changed") {
+    color = "var(--wa)"; label = "Changed";
+    note = "Prices differ from the saved snapshot.";
+  } else if (pricing.status === "no_static_prices") {
+    color = "var(--wa)"; label = "Can't read prices";
+    note = "We found the pricing page, but its prices load with JavaScript, so they can't be read. Open the page to check by hand.";
+  } else {
+    color = "var(--ne)"; label = "No pricing page";
+    note = "We couldn't find a pricing page on this site.";
+  }
+
+  var html = '<section class="pricing"><div class="pricing-head"><div class="section-title display">Pricing</div>';
+  html += '<span class="pill badge" style="--k:' + color + '">' + label + '</span></div>';
+  html += '<div class="note">' + note + '</div>';
+
+  if (pricing.status === "changed") {
+    if (pricing.removed.length > 0) {
+      html += '<div class="chip-row"><span class="label">Removed</span>';
+      for (var i = 0; i < pricing.removed.length; i++) {
+        html += '<span class="chip removed">' + escapeHtml(pricing.removed[i]) + '</span>';
+      }
+      html += '</div>';
+    }
+    if (pricing.added.length > 0) {
+      html += '<div class="chip-row"><span class="label">Added</span>';
+      for (var j = 0; j < pricing.added.length; j++) {
+        html += '<span class="chip added">' + escapeHtml(pricing.added[j]) + '</span>';
+      }
+      html += '</div>';
+    }
+  } else if ((pricing.status === "first_snapshot" || pricing.status === "unchanged") && pricing.prices.length > 0) {
+    html += '<div class="chip-row">';
+    for (var k = 0; k < pricing.prices.length && k < 12; k++) {
+      html += '<span class="chip">' + escapeHtml(pricing.prices[k]) + '</span>';
+    }
+    html += '</div>';
+  }
+
+  if (pricing.url) {
+    html += '<a href="' + escapeHtml(pricing.url) + '" target="_blank" rel="noopener">Open pricing page ↗</a>';
+  }
+  html += '</section>';
+  return html;
+}
+
+function showResult(result) {
+  var html = '<div class="results"><div class="banners">';
+  var status = result.status;
+  var posts = result.new_posts || [];
+
+  if (status === "ok") {
+    if (result.first_run) {
+      html += bannerHtml("var(--in)", "i", "Baseline saved: " + result.total_tracked + " URLs. From now on only new posts are reported.", "");
+    } else if (posts.length > 0) {
+      var word = posts.length === 1 ? " new post" : " new posts";
+      html += bannerHtml("var(--ok)", "✓", posts.length + word + " since the last check", "");
+    } else {
+      html += bannerHtml("var(--ne)", "✓", "No new posts since the last check.", "");
+    }
+  } else if (status === "no_blog_found") {
+    html += bannerHtml("var(--wa)", "!", "No blog found", result.message);
+  } else if (status === "blocked") {
+    html += bannerHtml("var(--er)", "✕", "This site blocks bots", result.message);
+  } else if (status === "unreachable") {
+    html += bannerHtml("var(--er)", "✕", "Could not reach the site", result.message);
+  } else if (status === "invalid_domain") {
+    html += bannerHtml("var(--er)", "✕", "That doesn't look like a domain", "Try something like ahrefs.com, without spaces or a path.");
+  } else {
+    html += bannerHtml("var(--er)", "✕", "Something went wrong", result.message);
+  }
+
+  if (result.note) {
+    html += bannerHtml("var(--wa)", "!", result.note, "");
+  }
+
+  if (result.alert) {
+    if (result.alert.sent && result.alert.sent.length > 0) {
+      html += '<div class="slack-line"><span>✓</span><span>Alert sent to ' + escapeHtml(result.alert.sent.join(" and ")) + '</span></div>';
+    } else if (result.alert.errors && result.alert.errors.length > 0) {
+      html += '<div class="slack-line"><span>✕</span><span>Alert failed: ' + escapeHtml(result.alert.errors.join("; ")) + '</span></div>';
+    }
+  }
+  html += '</div>';
+
+  if (posts.length > 0) {
+    html += '<div class="posts"><div class="section-title display">' + (result.first_run ? "Latest posts found" : "New posts") + '</div>';
+    for (var i = 0; i < posts.length; i++) {
+      var post = posts[i];
+      html += '<article class="post">';
+      html += '<a class="post-title" href="' + escapeHtml(post.url) + '" target="_blank" rel="noopener">' + escapeHtml(post.title) + ' ↗</a>';
+      if (post.description) { html += '<div class="desc">' + escapeHtml(post.description) + '</div>'; }
+      html += '<div class="meta"><span class="date">' + formatDate(post.published) + '</span>';
+      if (post.keyword) { html += '<span class="pill">' + escapeHtml(post.keyword) + '</span>'; }
+      html += '<span class="pill badge" style="--k:' + badgeColor(post.demand_text) + '" title="Free estimate from Google autocomplete, not exact search volume.">' + escapeHtml(post.demand_text) + '</span>';
+      html += '</div></article>';
+    }
+    html += '<div class="small-note">Demand is a free estimate from Google autocomplete, not exact search volume.</div></div>';
+  }
+
+  if (status === "ok" || status === "no_blog_found") {
+    html += pricingHtml(result.pricing);
+  }
+
+  if (result.seconds !== undefined) {
+    html += '<div class="small-note">Scan took ' + result.seconds + ' seconds · ' + result.total_tracked + ' URLs tracked</div>';
+  }
+  html += '</div>';
+  el("resultArea").innerHTML = html;
+}
+
+// ---------------- talking to the server ----------------
+
+async function postJson(url, body) {
+  var response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  return await response.json();
+}
+
+function setBusy(value) {
+  busy = value;
+  el("goButton").disabled = value;
+  el("goButton").textContent = value ? "Scanning..." : "Check competitor";
+  el("recheckAll").disabled = value;
+  drawSites();
+}
+
+// Scans one domain and shows the result. Returns the result.
+async function scan(domain) {
+  setBusy(true);
+  startLoading();
+  var result;
+  try {
+    result = await postJson("/api/check", {
+      domain: domain,
+      slack_webhook: el("slack").value,
+      send_alert: slackOn
+    });
+  } catch (error) {
+    result = { status: "error", message: "Could not reach the server. Is it still running?" };
+  }
+  stopLoading();
+  showResult(result);
+  setBusy(false);
+  await loadSites();
+  return result;
+}
+
+async function checkFromForm() {
+  if (busy) { return; }
+  await scan(el("domain").value.trim());
+}
+
+async function recheck(domain) {
+  if (busy) { return; }
+  el("domain").value = domain;
+  await scan(domain);
+}
+
+async function recheckAll() {
+  if (busy) { return; }
+  if (sitesData.length === 0) {
+    showToast(false, "Nothing to re-check yet. Run a first check.");
+    return;
+  }
+  var domains = [];
+  for (var i = 0; i < sitesData.length; i++) { domains.push(sitesData[i].domain); }
+  for (var j = 0; j < domains.length; j++) {
+    el("domain").value = domains[j];
+    var result = await scan(domains[j]);
+    if (result.status === "ok" && !result.first_run) {
+      showToast(true, domains[j] + ": " + result.new_posts.length + " new post(s)");
+    } else if (result.status !== "ok") {
+      showToast(false, domains[j] + ": " + result.status.replace(/_/g, " "));
+    }
+  }
+}
+
+async function forgetLatest(domain) {
+  try {
+    var result = await postJson("/api/forget-latest", { domain: domain });
+    if (result.status === "ok") {
+      showToast(true, "Done. Click Re-check and that post will show up as new.");
+    } else {
+      showToast(false, "Nothing to forget yet for " + domain + ". Run a check first.");
+    }
+  } catch (error) {
+    showToast(false, "Could not reach the server.");
+  }
+}
+
+async function forgetSite(domain) {
+  confirmDomain = "";
+  try {
+    var result = await postJson("/api/reset", { domain: domain });
+    if (result.status === "ok") {
+      showToast(true, "Forgot " + domain + ". Its next check will be a fresh first scan.");
+      if (el("domain").value.trim() === domain) { showEmpty(); }
+    } else {
+      showToast(false, result.message || "Could not forget this site.");
+    }
+  } catch (error) {
+    showToast(false, "Could not reach the server.");
+  }
+  await loadSites();
+}
+
+// ---------------- the watchlist ----------------
+
+function drawSites() {
+  var box = el("sitesList");
+  if (sitesData.length === 0) {
+    box.innerHTML = '<div class="no-sites">No competitors yet. Run your first check and it will be saved here, ready to re-check anytime.</div>';
+    return;
+  }
+  var disabled = busy ? " disabled" : "";
+  var html = "";
+  for (var i = 0; i < sitesData.length; i++) {
+    var site = sitesData[i];
+    var domain = escapeHtml(site.domain);
+    var color = SITE_COLORS[i % SITE_COLORS.length];
+    var sure = (confirmDomain === site.domain);
+    html += '<div class="site-card" style="margin-bottom:14px">';
+    html += '<div class="site-top"><b class="site-letter" style="--k:' + color + '">' + domain.charAt(0) + '</b>';
+    html += '<div style="min-width:0"><div class="site-name">' + domain + '</div>';
+    html += '<div class="site-sub">' + site.urls_tracked.toLocaleString() + ' URLs tracked · checked ' + timeAgo(site.seconds_ago) + '</div></div></div>';
+    html += '<div class="site-buttons">';
+    html += '<button class="recheck" data-action="recheck" data-domain="' + domain + '" title="Scan again and show only what is new"' + disabled + '>↻ Re-check</button>';
+    html += '<button data-action="forget-post" data-domain="' + domain + '" title="Demo helper: forget the newest saved post so the next Re-check finds it as new"' + disabled + '>Forget latest post</button>';
+    html += '<button class="forget-site' + (sure ? " sure" : "") + '" data-action="forget-site" data-domain="' + domain + '" title="Delete everything saved for this site"' + disabled + '>' + (sure ? "Sure? Click again" : "Forget site") + '</button>';
+    html += '</div></div>';
+  }
+  box.innerHTML = html;
+}
+
+async function loadSites() {
+  try {
+    var response = await fetch("/api/sites");
+    sitesData = await response.json();
+  } catch (error) {
+    sitesData = [];
+  }
+  drawSites();
+}
+
+function onSiteButtonClick(event) {
+  var button = event.target.closest("button");
+  if (button === null || button.disabled) { return; }
+  var action = button.getAttribute("data-action");
+  var domain = button.getAttribute("data-domain");
+
+  if (action === "recheck") { recheck(domain); }
+  if (action === "forget-post") { forgetLatest(domain); }
+  if (action === "forget-site") {
+    if (confirmDomain === domain) {
+      clearTimeout(confirmTimer);
+      forgetSite(domain);
+    } else {
+      confirmDomain = domain;
+      drawSites();
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(function () { confirmDomain = ""; drawSites(); }, 3000);
+    }
+  }
+}
+
+// ---------------- start ----------------
+
+el("goButton").addEventListener("click", checkFromForm);
+el("domain").addEventListener("keydown", function (event) { if (event.key === "Enter") { checkFromForm(); } });
+el("recheckAll").addEventListener("click", recheckAll);
+el("themeButton").addEventListener("click", function () { setTheme(document.body.className !== "t-dark"); });
+el("slackSwitchRow").addEventListener("click", toggleSlack);
+el("slackSwitchRow").addEventListener("keydown", function (event) {
+  if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleSlack(); }
+});
+el("sitesList").addEventListener("click", onSiteButtonClick);
+
+startTheme();
+showEmpty();
+loadSites();
+</script>
+</body>
+</html>
